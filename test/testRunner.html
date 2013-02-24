@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LiveMVC framework</title>
+    <link rel="stylesheet" href="mocha.css" />
+    <script src="mocha.js"></script>
+    <script src="chai.js"></script>
+    <script src="../lib/curl.js"></script>
+    <script>
+        window.mocha.setup('bdd')
+        window.expect = window.chai.expect;
+        var baseDeps = [
+          "EventEmitter",
+          "Model",
+          "Controller",
+          "HtmlViewList",
+          "HtmlView",
+          "HtmlController",
+          "HtmlArrayController",
+          "HtmlElementController",
+        ];
+        window.curl( { baseUrl: '../' }, baseDeps )
+        .next([
+          "test/EventEmitterSpec",
+          "test/ModelSpec",
+          "test/HtmlViewSpec",
+          "test/HtmlControllerSpec",
+          //"test/HtmlArrayControllerSpec"
+          ])
+        .then(function() {
+            window.mocha.run();
+        });
+    </script>
+</head>
+<body><div id="mocha"/></body>
+</html>
