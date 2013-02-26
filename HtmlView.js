@@ -6,11 +6,11 @@ define(function(require) {
    *
    **/
 
-   function encodeSelector(selector) {
+  function encodeSelector(selector) {
     return btoa(selector).replace(/=/g,'_');
   }
 
-   function decodeSelector(encodedSelector) {
+  function decodeSelector(encodedSelector) {
     return atob(encodedSelector.replace(/_/g,'='));
   }
 
@@ -20,7 +20,6 @@ define(function(require) {
   function listenOnInsertedNode(selector, fullSelector) {
     // if an event emmiter has been registered for this full selector before, return
     if (insertedNodeCss[fullSelector]) return;
-    console.log('listening on node', selector, fullSelector)
     var encodedSelector = encodeSelector(selector);
     var rule = "";
     for ( var i = 0; i < prefixes.length; i++ ) {
@@ -40,10 +39,13 @@ define(function(require) {
     document.querySelector("head").appendChild(css);
     // registering for later removal
     insertedNodeCss[fullSelector] = css;
+    //console.log('listening', fullSelector)
   }
   function unListenOnInsertedNode(fullSelector) {
     if ( insertedNodeCss.hasOwnProperty(fullSelector) ) {
+      //console.log('unlistening', fullSelector)
       var css = insertedNodeCss[fullSelector];
+      delete insertedNodeCss[fullSelector];
       document.querySelector("head").removeChild(css);
       return true;
     } else {
@@ -71,6 +73,7 @@ define(function(require) {
 //  HtmlView.style = document.createElement("style");
 //  HtmlView.style.type = "text/css";
 //  document.querySelector("head").appendChild(HtmlView.style);
+
 
 
 
@@ -105,57 +108,80 @@ define(function(require) {
   });
   Object.defineProperties( Element.prototype, {
     liveQuerySelectorAll: {
-      value: function(selector, callback) {
-        var elements = this.querySelectorAll(selector);
+      value: function(selector, addCallback, removeCallback) {
+        var elements = Array.prototype.concat.apply([], this.querySelectorAll(selector));
         for ( var i =0; i < elements.length; i++ ) {
           var element = elements[i];
-          callback.call(element, element);
+          addCallback.call(element, element);
         }
-        var fullSelector = this.__view ? this.__view.getFullSelector(selector) : this.getSelector() + ' > '+ selector;
+
+        var fullSelector = this.__view ? this.__view.getFullSelector(selector) : this.getSelector() + ' '+ selector;
         listenOnInsertedNode(selector, fullSelector);
         function newElementHandler( event ) {
           var element = event.target;
           if ( selector === decodeSelector(event.animationName) ) {
-            callback.call(element, element);
+            elements.push(element);
+            addCallback.call(element, element);
             event.stopPropagation();
           }
         }
         this.addEventListener('animationstart', newElementHandler, true);
         this.addEventListener('MSAnimationStart', newElementHandler, true);
         this.addEventListener('webkitAnimationStart', newElementHandler, true);
-        // Returning a clearing function
-        return function() {
-          this.addEventListener('animationstart', newElementHandler, true);
-          this.addEventListener('MSAnimationStart', newElementHandler, true);
-          this.addEventListener('webkitAnimationStart', newElementHandler, true);
-          return HtmlView.unListenOnInsertedNode(selector);
+        // Metho to watch weather the nodes had been deleted, or if this element is no longer part of the document...
+        function watchInsertedNodes() {
+          // If this node is no longer appended
+          if ( !this.isAppended() ) clear();
+          for ( var i =0; i < elements.length; i++ ) {
+            var element = elements[i];
+            if ( !element.isAppended() ) {
+              removeCallback && removeCallback.call(element, element);
+            }
+          }
         }
-      }
+        //Check for removed nodes every 5 minutes to clear memory
+        var intervalId = setInterval(watchInsertedNodes.bind(this), 300000)
+        // Or listen to the update event
+        this.addEventListener('update', watchInsertedNodes, true);
+
+        // Returning a clearing function
+        return function clear() {
+          clearInterval(intervalId);
+          this.removeEventListener('animationstart', newElementHandler, true);
+          this.removeEventListener('MSAnimationStart', newElementHandler, true);
+          this.removeEventListener('webkitAnimationStart', newElementHandler, true);
+          this.removeEventListener('update', watchInsertedNodes, true);
+          return unListenOnInsertedNode(fullSelector);
+        }
+      },
+      enumerable:true
     },
     liveQuerySelector: {
       value: function(selector, callback) {
         var element = this.querySelector(selector);
         element && callback.apply(element, element);
-      }
+      },
+      enumerable:true
     },
     getSelector: {
       value: function() {
         var names = [];
         var element = this;
-        while ( element.parentNode) {
+        while ( element.parentNode ) {
+          var tagName = element.tagName.toLowerCase();
           if (element.id) {
-            names.unshift('#' + element.id);
+            names.unshift(tagName + '#' + element.id);
             break;
           }
           else {
-            if ( element.tagName === 'html' ) {
-              names.unshift(element.tagName);
+            if ( element instanceof HTMLBodyElement || element instanceof HTMLHtmlElement ) {
+              break;
             }
             else {
               var i = element.parentNode.childNodes.length;
               while ( --i >= 0 ) {
                 if ( element.parentNode.childNodes[i] === element ) {
-                  names.unshift(element.tagName + ":nth-child(" + i + ")");
+                  names.unshift(tagName + ":nth-child(" + i + ")");
                   break;
                 }
               }
@@ -164,76 +190,84 @@ define(function(require) {
           }
         }
         return names.join(" > ");
-      }
+      },
+      enumerable:true
+    },
+    isAppended: {
+      value: function() {
+        if ( this.parentNode === document ) {
+          return true;
+        }
+        else if ( this.parentNode !== null ) {
+          return this.parentNode.isAppended();
+        }
+        else {
+          return false;
+        }
+      },
+      enumerable:true
+    },
+    update: {
+      value: function() {
+        var updateEvent = new CustomEvent('update');
+        this.dispatchEvent(updateEvent);
+      },
+      enumerable:true
     }
   });
+
+
 
 
   // View Class
   // Views are a place holder for HTML elements, that event out whenever an element is available for a controller to get.
 
-  function HtmlView(element, selector) {
+  function HtmlView(element, parent) {
     Object.defineProperties(this, {
       element: {
         value: element||document.querySelector('body'),
-        configurable: true
       },
       views: {
         value: {}
       },
-      clearLiveSelector: {
-        value: {}
+      parent: {
+        value: parent || null
       },
       selector: {
-        value: selector||'body'
-      },
-      newElementHandler: {
-        value: this.newElement.bind(this)
+        get: function() { return parent.selector }
       }
     });
     this.element.view = this;
   }
 
-  HtmlView.prototype.newElement = function (event) {
-    var element = event.target;
-    //TODO: Handle new style tags and script tags for view scoped functionality
-    var selector = HtmlView.decodeSelector(event.animationName);
-    if ( this.newChildViewElement(selector, element) ) {
-      event.stopPropagation();
-    }
-  }
-
-  HtmlView.prototype.newChildViewElement = function (selector, element) {
-    if ( this.views[selector] ) {
-      var view = new HtmlView(element, this.getFullSelector(selector));
-      this.views[selector].addView(view);
-      return true;
-    }
-  }
 
   HtmlView.prototype.getChildren = function (selector) {
+    // Making it easy to add "<propertyName:>" formated tags
+    var selector = selector.replace(/(\w+)\:/gi, '$1\\:');
     if ( !this.views[selector] ) {
-      this.views[selector] = new HtmlViewList();
-      var self = this;
-      var clear = this.element.liveQuerySelectorAll(selector, function (element) {
-        // Only create if the element found is within another view, with the same selector...
-        if ( element.view && element.view !== self && element.view.views[selector] ) return;
-        var view = new HtmlView(element, self.getFullSelector(selector));
-        self.views[selector].addView(view);
-      });
-      this.clearLiveSelector[selector] = clear;
+      this.views[selector] = new HtmlViewList(this, selector, HtmlView);
     }
     return this.views[selector];
   }
 
   HtmlView.prototype.getFullSelector = function (selector) {
-      return this.selector + ' > ' + selector;
+      return (this.parent) ? this.parent.getFullSelector() + ' ' + selector : this.element.tagName.toLowerCase() + ' ' + selector;
   }
 
   HtmlView.prototype.destroy = function () {
-    // Remove node insertion animation event listeners
-    for ( var selector in this.clearLiveSelector ) {
-      this.clearLiveSelector[selector]();
+    // Destroy all viewLists
+    for ( var selector in this.views ) {
+      this.views[selector].destroy();
+    }
+    // Remove inline styles stylesheets
+
+    // Remove inline script script elements
+  }
+
+  HtmlView.prototype.destroy = function () {
+    // Destroy all viewLists
+    for ( var selector in this.views ) {
+      this.views[selector].destroy();
     }
     // Remove inline styles stylesheets
 
@@ -280,12 +314,9 @@ define(function(require) {
     var oninitAttribute = element.getAttribute('oninit');
     if ( oninitAttribute ) {
       var eventListener = new Function(oninitAttribute);
-      eventListener.apply(element, onInitEvent);
+      eventListener.call(element, onInitEvent);
     }
   });
-
-
-
 
 
 

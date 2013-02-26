@@ -6,6 +6,7 @@ define(function( require ) {
     it('When instantiating an Html View with no element, should assume the body element', function () {
       var view = new HtmlView();
       expect(view.element).to.equal(document.body);
+      view.destroy();
     });
 
 
@@ -15,6 +16,7 @@ define(function( require ) {
         done();
       });
       view.click();
+      view.destroy();
     });
 
     it('should be possible to read any property, or call any method of the underlying element directly on the view', function () {
@@ -28,6 +30,7 @@ define(function( require ) {
       var child = document.createElement('span');
       view.appendChild(child)
       expect( element.lastChild ).to.equal( child );
+      view.destroy();
 
     });
 
@@ -38,6 +41,7 @@ define(function( require ) {
       var viewList = view.getChildren('element');
       expect( viewList[0].element ).to.equal( element );
       view.removeChild(element);
+      view.destroy();
     });
 
     it('should be possible to subscribe to the addView event on a view list', function ( done ) {
@@ -48,22 +52,42 @@ define(function( require ) {
         expect(event.arguments[0]).to.be.instanceof(HtmlView);
         expect(event.arguments[0].element).to.equal(element);
         view.removeChild(element);
+        view.destroy();
         done();
       });
+
       view.appendChild(element);
+
+
     });
 
-    xit('should be possible to subscribe to the removeView event on a view list', function ( done ) {
+    it('should be possible to subscribe to the removeView event on a view list', function ( done ) {
       var view = new HtmlView();
-      view.addEventListener('removeView', function() {
+      var element = document.createElement('element');
+      view.appendChild(element);
+      var viewList = view.getChildren('element');
+      viewList.addEventListener('removeView', function(event) {
+        var view = event.arguments[0];
+        expect(view.element).to.equal(element);
+        view.destroy();
         done();
       });
-      view.removeView(view);
+      view.removeChild(element);
+      view.update();
     });
-    
-    
-    xit('should be possible to have the onload/oninit event to apply on new elements', function () {
 
+
+    it('should be possible to have the onload/oninit event to apply on new elements', function ( done ) {
+      var view = new HtmlView();
+      var div = document.createElement('div');
+      div.innerHTML = "<div oninit='this.textContent=1'></div>";
+      view.appendChild(div);
+      setTimeout(function() {
+        expect(div.firstChild.textContent).to.equal("1");
+        view.removeChild(div);
+        view.destroy();
+        done();
+      }, 10);
     });
 
     xit('should be possible to have view scoped stylesheets', function () {

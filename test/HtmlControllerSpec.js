@@ -2,6 +2,7 @@ define(function ( require ) {
   var HtmlElementController = require('HtmlElementController');
   var HtmlController = require('HtmlController');
   var Model = require('Model');
+  var HtmlView = require('HtmlView');
 
 
 
@@ -242,11 +243,11 @@ define(function ( require ) {
 
 
       xit('should be possible to remove a property', function (  ) {
-        
+
       });
 
       xit('should be possible to update all properties for a new model, if the model was non Class build (directly from Model)', function (  ) {
-        
+
       });
 
       xit('action events, should be able to bubble up to the parent controller, until the action can be handled', function (  ) {
@@ -261,14 +262,23 @@ define(function ( require ) {
       });
 
       xit('the address bar gets updated whenever an action is triggered, and if bookmarked the page will be able to replicate the last state of the page at the bookmarked location', function (  ) {
-        
+
       });
-      
+
       xit('Should return', function (  ) {
-        
+
       });
-      
-      
+
+
+
+    });
+
+    describe("Controller Group wrapping", function() {
+
+
+
+
+
 
     });
   });
