@@ -104,8 +104,9 @@ define(function(require) {
       set: function( view ) {
         this.__view = view;
       }
-    },
+    }
   });
+
   Object.defineProperties( Element.prototype, {
     liveQuerySelectorAll: {
       value: function(selector, addCallback, removeCallback) {
@@ -225,7 +226,7 @@ define(function(require) {
   function HtmlView(element, parent) {
     Object.defineProperties(this, {
       element: {
-        value: element||document.querySelector('body'),
+        value: element||document.querySelector('body')
       },
       views: {
         value: {}
